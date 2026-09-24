@@ -59,6 +59,8 @@ public final class MenuBarManagerService: ObservableObject {
     }
 
     /// Trenner-Icons in Menü-Bar an/aus schalten passend zum isEnabled-State.
+    /// Wenn ge-enabled, wird auch einmalig der Icon-Bestand enumeriert und
+    /// als Log ausgegeben (Beweis dass die private CGS-API funktioniert).
     private func reconcileControlItems() {
         if isEnabled {
             if hiddenSeparator == nil {
@@ -69,9 +71,31 @@ public final class MenuBarManagerService: ObservableObject {
             }
             hiddenSeparator?.install()
             alwaysHiddenSeparator?.install()
+            // NSApplication.run() has not yet started when this fires from
+            // init() — CGSGetProcessMenuBarWindowList returns 0 items for a
+            // process without a menu-bar connection. Defer to first main-loop
+            // tick, and again at 3s once other apps' status items have
+            // reliably registered.
+            DispatchQueue.main.async { [weak self] in self?.discoverAndLogIcons() }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+                self?.discoverAndLogIcons()
+            }
         } else {
             hiddenSeparator?.uninstall()
             alwaysHiddenSeparator?.uninstall()
+        }
+    }
+
+    /// Phase 4 milestone: prove that we can see other apps' menu-bar icons.
+    /// Prints a compact summary to stderr; a real UI comes in Phase 6.
+    public func discoverAndLogIcons() {
+        let items = MenuBarEnumerator.snapshot()
+        FileHandle.standardError.write(
+            Data("[MenuBarManager] discovered \(items.count) menu-bar items:\n".utf8)
+        )
+        for item in items {
+            let line = "  · pid=\(item.ownerPID) owner=\(item.ownerName) title=\"\(item.title)\" x=\(Int(item.frame.minX))\n"
+            FileHandle.standardError.write(Data(line.utf8))
         }
     }
 
