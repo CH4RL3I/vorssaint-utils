@@ -29,6 +29,9 @@ enum AppFeature: String, CaseIterable {
     case quickLauncher, quickToggles, colorPicker, screenOCR, cleaningMode, mediaTools,
          cleaner, uninstaller, homebrew, appUpdates, screenshot, cameraPreview, radialMenu, scratchpad,
          commandBar, screenRecorder, killProcess, portManager
+    // FUTURE (Phase 3): reinstate `menuBarManager` here — cascades into `group`,
+    // `symbolName`, `enabledKeys`, `permissions` switches plus a new DefaultsKey.
+    // Left out for Phase 2 to keep the skeleton compile minimal.
     // Dynamic Island, then its extensions
     case notch, notchCalendar, notchNotifications, notchGestures, notchTimer, notchAccessories, notchLyrics,
          notchQueue, notchLiveEqualizer, notchDownloads, notchAgents

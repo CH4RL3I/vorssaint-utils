@@ -34,11 +34,16 @@ public final class MenuBarManagerService: ObservableObject {
         didSet {
             guard isEnabled != oldValue else { return }
             UserDefaults.standard.set(isEnabled, forKey: Defaults.enabledKey)
+            reconcileControlItems()
         }
     }
 
     /// Die drei Sektionen mit ihren aktuell zugewiesenen Item-Identifiern.
     @Published public private(set) var sections: [MenuBarSection]
+
+    /// Die Trenner-Icons in der Menü-Bar. Lazy angelegt beim ersten install.
+    private var hiddenSeparator: MenuBarControlItem?
+    private var alwaysHiddenSeparator: MenuBarControlItem?
 
     private init() {
         // Feature-Flag laden. Default = false, bis der User es aktiviert.
@@ -48,6 +53,25 @@ public final class MenuBarManagerService: ObservableObject {
         self.sections = MenuBarSectionName.allCases.map { name in
             let stored = UserDefaults.standard.stringArray(forKey: name.defaultsKey) ?? []
             return MenuBarSection(id: name, itemIdentifiers: stored)
+        }
+        // Beim Start ControlItems ausrichten gemäß aktuellem isEnabled-State.
+        reconcileControlItems()
+    }
+
+    /// Trenner-Icons in Menü-Bar an/aus schalten passend zum isEnabled-State.
+    private func reconcileControlItems() {
+        if isEnabled {
+            if hiddenSeparator == nil {
+                hiddenSeparator = MenuBarControlItem(kind: .sectionSeparatorHidden)
+            }
+            if alwaysHiddenSeparator == nil {
+                alwaysHiddenSeparator = MenuBarControlItem(kind: .sectionSeparatorAlwaysHidden)
+            }
+            hiddenSeparator?.install()
+            alwaysHiddenSeparator?.install()
+        } else {
+            hiddenSeparator?.uninstall()
+            alwaysHiddenSeparator?.uninstall()
         }
     }
 

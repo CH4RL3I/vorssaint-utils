@@ -8,10 +8,17 @@ Defaults.register()
 MouseAccelerationGuard.runIfRequestedAndExit()
 MouseAccelerationService.recoverPendingAtLaunch()
 
-// Fork addition (Phase 2 skeleton): warm up the menu-bar-manager singleton so
-// its sections hydrate from UserDefaults at launch. Currently a no-op except
-// for state; the actual menu-bar hooks land in Phase 3.
-_ = MainActor.assumeIsolated { MenuBarManagerService.shared }
+// Fork addition (Phase 3 prototype): warm up the menu-bar-manager singleton
+// and force-enable it so the placeholder ControlItems show up in the menu
+// bar right after launch. Force is TEMPORARY — in Phase 4 the toggle lives
+// in Vorssaint's Settings UI and reads user intent.
+MainActor.assumeIsolated {
+    let svc = MenuBarManagerService.shared
+    #if VORSSAINT_DEVELOPMENT
+    svc.isEnabled = true
+    #endif
+    _ = svc
+}
 
 #if VORSSAINT_DEVELOPMENT
 if CommandLine.arguments.contains("--notch-presentation-test") {
