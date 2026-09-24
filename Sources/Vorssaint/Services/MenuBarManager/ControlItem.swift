@@ -35,9 +35,15 @@ public final class MenuBarControlItem: ObservableObject {
 
     @Published public private(set) var state: HidingState = .showsItems
 
-    /// The actual menu-bar icon. The system owns the window; we own this
-    /// reference so we can remove it on tear-down.
-    private var statusItem: NSStatusItem?
+    /// Two status items internally. The `glyph` item stays visible and thin;
+    /// it hosts the button the user clicks. The `blocker` item only exists
+    /// while the state is .hidesItems — it's 10 000 pt wide, has no visible
+    /// content, and is registered AFTER the glyph so it sits to the left of
+    /// it in the menu bar (macOS orders status items right→left in
+    /// registration order). Being to the left of the glyph and being wide,
+    /// it pushes every item that is further left than itself off-screen.
+    private var glyphItem: NSStatusItem?
+    private var blockerItem: NSStatusItem?
 
     public init(kind: Kind) {
         self.kind = kind
@@ -45,7 +51,7 @@ public final class MenuBarControlItem: ObservableObject {
 
     /// Attach to the system menu bar. Idempotent — calling twice does nothing.
     public func install() {
-        guard statusItem == nil else { return }
+        guard glyphItem == nil else { return }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
             applyGlyph(to: button)
@@ -55,22 +61,27 @@ public final class MenuBarControlItem: ObservableObject {
             // Send action on either mouse button — matches Bartender's UX.
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
-        self.statusItem = item
-        applyLength()
+        self.glyphItem = item
+        applyBlocker()
     }
 
     /// Detach from the system menu bar.
     public func uninstall() {
-        guard let item = statusItem else { return }
-        NSStatusBar.system.removeStatusItem(item)
-        self.statusItem = nil
+        if let item = blockerItem {
+            NSStatusBar.system.removeStatusItem(item)
+            self.blockerItem = nil
+        }
+        if let item = glyphItem {
+            NSStatusBar.system.removeStatusItem(item)
+            self.glyphItem = nil
+        }
     }
 
     /// Flip between showing and hiding neighbours.
     public func toggle() {
         state = (state == .showsItems) ? .hidesItems : .showsItems
-        applyLength()
-        applyGlyph(to: statusItem?.button)
+        applyBlocker()
+        applyGlyph(to: glyphItem?.button)
     }
 
     /// Set the state explicitly (called by MenuBarManagerService when
@@ -78,20 +89,27 @@ public final class MenuBarControlItem: ObservableObject {
     public func setState(_ newState: HidingState) {
         guard state != newState else { return }
         state = newState
-        applyLength()
-        applyGlyph(to: statusItem?.button)
+        applyBlocker()
+        applyGlyph(to: glyphItem?.button)
     }
 
-    /// Adjust the NSStatusItem's on-screen width based on state.
-    private func applyLength() {
-        guard let statusItem else { return }
+    /// Add or remove the invisible wide blocker item depending on state.
+    /// The glyph item itself stays a normal thin status item and is never
+    /// resized — that's why the user always sees where to click.
+    private func applyBlocker() {
         switch state {
         case .showsItems:
-            statusItem.length = NSStatusItem.variableLength
+            if let item = blockerItem {
+                NSStatusBar.system.removeStatusItem(item)
+                self.blockerItem = nil
+            }
         case .hidesItems:
-            // 10 000 pt is Ice's `Lengths.expanded` — wide enough to push
-            // every neighbouring item off-screen on any real display size.
-            statusItem.length = 10_000
+            if blockerItem == nil {
+                let item = NSStatusBar.system.statusItem(withLength: 10_000)
+                item.button?.title = ""      // invisible
+                item.button?.isEnabled = false
+                self.blockerItem = item
+            }
         }
     }
 
@@ -125,7 +143,10 @@ public final class MenuBarControlItem: ObservableObject {
     deinit {
         // NSStatusItem is released by the system when we drop our reference,
         // but explicit removal is cleaner.
-        if let item = statusItem {
+        if let item = blockerItem {
+            NSStatusBar.system.removeStatusItem(item)
+        }
+        if let item = glyphItem {
             NSStatusBar.system.removeStatusItem(item)
         }
     }
