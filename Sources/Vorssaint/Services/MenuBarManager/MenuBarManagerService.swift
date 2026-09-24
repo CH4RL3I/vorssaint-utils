@@ -9,7 +9,6 @@
 import AppKit
 import Combine
 import Foundation
-import SwiftUI
 
 /// Verwaltet die drei Sektionen und ihre Icon-Zuordnung.
 ///
@@ -71,6 +70,15 @@ public final class MenuBarManagerService: ObservableObject {
             }
             hiddenSeparator?.install()
             alwaysHiddenSeparator?.install()
+            // Hydrate each separator's toggle-state from what it looked like
+            // last time the user quit. Without this, every launch resets to
+            // "everything shown" — annoying if you actually want stuff hidden.
+            hiddenSeparator?.setState(loadState(for: .sectionSeparatorHidden))
+            alwaysHiddenSeparator?.setState(loadState(for: .sectionSeparatorAlwaysHidden))
+            // Persist any future toggle. Observing @Published state via
+            // Combine keeps it simple; we sink into UserDefaults on change.
+            wireStatePersistence(hiddenSeparator, kind: .sectionSeparatorHidden)
+            wireStatePersistence(alwaysHiddenSeparator, kind: .sectionSeparatorAlwaysHidden)
             // NSApplication.run() has not yet started when this fires from
             // init() — CGSGetProcessMenuBarWindowList returns 0 items for a
             // process without a menu-bar connection. Defer to first main-loop
@@ -84,6 +92,34 @@ public final class MenuBarManagerService: ObservableObject {
             hiddenSeparator?.uninstall()
             alwaysHiddenSeparator?.uninstall()
         }
+    }
+
+    // MARK: - Toggle-state persistence
+
+    private var cancellables = Set<AnyCancellable>()
+
+    private func stateKey(for kind: MenuBarControlItem.Kind) -> String {
+        "menuBarManager.controlItem.\(kind.rawValue).state"
+    }
+
+    private func loadState(for kind: MenuBarControlItem.Kind) -> MenuBarControlItem.HidingState {
+        let raw = UserDefaults.standard.string(forKey: stateKey(for: kind)) ?? "showsItems"
+        return raw == "hidesItems" ? .hidesItems : .showsItems
+    }
+
+    private func wireStatePersistence(
+        _ item: MenuBarControlItem?,
+        kind: MenuBarControlItem.Kind
+    ) {
+        guard let item else { return }
+        item.$state
+            .dropFirst() // first value = initial; not a user change
+            .sink { [weak self] newState in
+                guard let self else { return }
+                let raw = (newState == .hidesItems) ? "hidesItems" : "showsItems"
+                UserDefaults.standard.set(raw, forKey: self.stateKey(for: kind))
+            }
+            .store(in: &cancellables)
     }
 
     /// Phase 4 milestone: prove that we can see other apps' menu-bar icons.

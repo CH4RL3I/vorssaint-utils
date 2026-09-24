@@ -96,14 +96,26 @@ public final class MenuBarControlItem: ObservableObject {
     }
 
     /// Glyph updates on state changes so the user can see which mode we're in.
+    /// When the item is 10 000 pt wide (hidesItems), a plain `title` would be
+    /// centered inside those 10 000 pt and disappear off-screen. Fix: draw
+    /// the glyph as a right-aligned attributed string so it stays anchored to
+    /// the right edge of the button — right where the item actually sits in
+    /// the menu bar.
     private func applyGlyph(to button: NSStatusBarButton?) {
         guard let button else { return }
+        let glyph: String
         switch (kind, state) {
-        case (.sectionSeparatorHidden, .showsItems):        button.title = "◀"
-        case (.sectionSeparatorHidden, .hidesItems):        button.title = "▶"
-        case (.sectionSeparatorAlwaysHidden, .showsItems):  button.title = "◁"
-        case (.sectionSeparatorAlwaysHidden, .hidesItems):  button.title = "▷"
+        case (.sectionSeparatorHidden, .showsItems):        glyph = "◀"
+        case (.sectionSeparatorHidden, .hidesItems):        glyph = "▶"
+        case (.sectionSeparatorAlwaysHidden, .showsItems):  glyph = "◁"
+        case (.sectionSeparatorAlwaysHidden, .hidesItems):  glyph = "▷"
         }
+        let para = NSMutableParagraphStyle()
+        para.alignment = .right
+        button.attributedTitle = NSAttributedString(
+            string: glyph,
+            attributes: [.paragraphStyle: para]
+        )
     }
 
     @objc private func toggleClicked() {
