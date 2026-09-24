@@ -40,6 +40,28 @@ private func VMB_CGSGetProcessMenuBarWindowList(
     _ outCount: inout Int32
 ) -> CGError
 
+// Try the direct move approach. Ice's move() uses event-injection cmd-drag
+// (~500 LOC). If this simpler private call actually moves menu-bar items
+// on macOS 26 we skip that whole port; if it doesn't (typical since ~2022),
+// we know Ice's approach is unavoidable.
+@_silgen_name("CGSMoveWindow")
+func VMB_CGSMoveWindow(
+    _ cid: VMBCGSConnectionID,
+    _ wid: CGWindowID,
+    _ point: UnsafePointer<CGPoint>
+) -> CGError
+
+/// Experimental: try to move a menu-bar item to an absolute screen point.
+/// Returns the CGError code (0 = success). Log-only for now.
+public func vmb_tryMoveMenuBarItem(_ wid: CGWindowID, to point: CGPoint) -> Int32 {
+    let cid = VMB_CGSMainConnectionID()
+    var p = point
+    let result = withUnsafePointer(to: &p) { ptr in
+        VMB_CGSMoveWindow(cid, wid, ptr)
+    }
+    return result.rawValue
+}
+
 // MARK: - Item model
 
 /// A menu-bar item observed in the system menu bar. What the service will

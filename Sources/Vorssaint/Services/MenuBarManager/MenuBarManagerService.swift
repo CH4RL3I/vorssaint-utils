@@ -133,6 +133,31 @@ public final class MenuBarManagerService: ObservableObject {
             let line = "  · pid=\(item.ownerPID) owner=\(item.ownerName) title=\"\(item.title)\" x=\(Int(item.frame.minX))\n"
             FileHandle.standardError.write(Data(line.utf8))
         }
+        // Phase 7 experiment: try to move ONE arbitrary menu-bar item off-screen
+        // via CGSMoveWindow. Success would let us skip Ice's 500-LOC event
+        // simulation. First item that is owned by Control Center + is titled
+        // "Item-0" (anonymous, low blast radius if we accidentally move a real
+        // system icon).
+        guard let victim = items.first(where: { $0.ownerName == "Control Center" && $0.title == "Item-0" }) else {
+            return
+        }
+        let originalX = Int(victim.frame.minX)
+        let target = CGPoint(x: -500, y: 0)
+        let code = vmb_tryMoveMenuBarItem(victim.windowID, to: target)
+        FileHandle.standardError.write(Data(
+            "[MoveTest] CGSMoveWindow(wid=\(victim.windowID) from x=\(originalX) to x=-500) → \(code)\n".utf8
+        ))
+        // Wait 500ms, re-enumerate, see if x actually changed.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            let after = MenuBarEnumerator.snapshot()
+            if let sameItem = after.first(where: { $0.windowID == victim.windowID }) {
+                FileHandle.standardError.write(Data(
+                    "[MoveTest] after: wid=\(sameItem.windowID) now at x=\(Int(sameItem.frame.minX)) (was \(originalX))\n".utf8
+                ))
+            } else {
+                FileHandle.standardError.write(Data("[MoveTest] after: victim disappeared\n".utf8))
+            }
+        }
     }
 
     // MARK: - Icon-Zuweisung
