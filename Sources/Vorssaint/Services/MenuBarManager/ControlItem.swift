@@ -15,7 +15,7 @@ import AppKit
 import Combine
 
 @MainActor
-public final class MenuBarControlItem {
+public final class MenuBarControlItem: ObservableObject {
     /// Kind of a control item — corresponds 1:1 to Ice's Identifier enum but
     /// re-typed to keep the enum self-contained inside our namespace.
     public enum Kind: String {
@@ -23,7 +23,17 @@ public final class MenuBarControlItem {
         case sectionSeparatorAlwaysHidden // sits between hidden and always-hidden
     }
 
+    /// The key Bartender/Ice trick: menu-bar items are NOT moved. Instead
+    /// the separator's own width is toggled — thin = neighbours visible,
+    /// very wide = neighbours are pushed out of the screen edge and hidden.
+    public enum HidingState {
+        case showsItems  // separator is a thin visible glyph
+        case hidesItems  // separator is 10 000 wide, hiding everything right of it
+    }
+
     public let kind: Kind
+
+    @Published public private(set) var state: HidingState = .showsItems
 
     /// The actual menu-bar icon. The system owns the window; we own this
     /// reference so we can remove it on tear-down.
@@ -37,16 +47,16 @@ public final class MenuBarControlItem {
     public func install() {
         guard statusItem == nil else { return }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        // Placeholder look: a single-char label. Ice uses a custom SVG in
-        // ControlItemImage.swift; that ~250 LOC part is not ported yet.
         if let button = item.button {
-            switch kind {
-            case .sectionSeparatorHidden:        button.title = "◀"
-            case .sectionSeparatorAlwaysHidden:  button.title = "◁"
-            }
-            button.toolTip = "OpenClaw fork menu-bar-manager placeholder (\(kind.rawValue))"
+            applyGlyph(to: button)
+            button.toolTip = "OpenClaw fork menu-bar-manager (\(kind.rawValue))"
+            button.target = self
+            button.action = #selector(toggleClicked)
+            // Send action on either mouse button — matches Bartender's UX.
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
         self.statusItem = item
+        applyLength()
     }
 
     /// Detach from the system menu bar.
@@ -54,6 +64,50 @@ public final class MenuBarControlItem {
         guard let item = statusItem else { return }
         NSStatusBar.system.removeStatusItem(item)
         self.statusItem = nil
+    }
+
+    /// Flip between showing and hiding neighbours.
+    public func toggle() {
+        state = (state == .showsItems) ? .hidesItems : .showsItems
+        applyLength()
+        applyGlyph(to: statusItem?.button)
+    }
+
+    /// Set the state explicitly (called by MenuBarManagerService when
+    /// hydrating from persisted defaults).
+    public func setState(_ newState: HidingState) {
+        guard state != newState else { return }
+        state = newState
+        applyLength()
+        applyGlyph(to: statusItem?.button)
+    }
+
+    /// Adjust the NSStatusItem's on-screen width based on state.
+    private func applyLength() {
+        guard let statusItem else { return }
+        switch state {
+        case .showsItems:
+            statusItem.length = NSStatusItem.variableLength
+        case .hidesItems:
+            // 10 000 pt is Ice's `Lengths.expanded` — wide enough to push
+            // every neighbouring item off-screen on any real display size.
+            statusItem.length = 10_000
+        }
+    }
+
+    /// Glyph updates on state changes so the user can see which mode we're in.
+    private func applyGlyph(to button: NSStatusBarButton?) {
+        guard let button else { return }
+        switch (kind, state) {
+        case (.sectionSeparatorHidden, .showsItems):        button.title = "◀"
+        case (.sectionSeparatorHidden, .hidesItems):        button.title = "▶"
+        case (.sectionSeparatorAlwaysHidden, .showsItems):  button.title = "◁"
+        case (.sectionSeparatorAlwaysHidden, .hidesItems):  button.title = "▷"
+        }
+    }
+
+    @objc private func toggleClicked() {
+        toggle()
     }
 
     deinit {
