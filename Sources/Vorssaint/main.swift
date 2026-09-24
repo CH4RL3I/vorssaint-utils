@@ -8,6 +8,11 @@ Defaults.register()
 MouseAccelerationGuard.runIfRequestedAndExit()
 MouseAccelerationService.recoverPendingAtLaunch()
 
+// Fork addition (Phase 2 skeleton): warm up the menu-bar-manager singleton so
+// its sections hydrate from UserDefaults at launch. Currently a no-op except
+// for state; the actual menu-bar hooks land in Phase 3.
+_ = MainActor.assumeIsolated { MenuBarManagerService.shared }
+
 #if VORSSAINT_DEVELOPMENT
 if CommandLine.arguments.contains("--notch-presentation-test") {
     NotchPresentationProbe.runAndExit()
