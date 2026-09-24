@@ -111,6 +111,24 @@ public final class MenuBarControlItem: ObservableObject {
                 self.blockerItem = item
             }
         }
+        // KNOWN LIMITATION on macOS 26 + multi-screen:
+        // Requested length=10 000 is clamped by the system to ~2×primary-
+        // screen width, and menu-bar items on a secondary display are
+        // rendered independently of items on the primary. Result: this
+        // blocker does not visually hide neighbouring icons on such a
+        // setup. Ice/Bartender ≥2024 solve this by moving items directly
+        // via the private CGSMoveWindow API — see Ice's MenuBarItemManager
+        // `move(_:to:)`. Porting that is Phase 7.
+        let glyphFrame = glyphItem?.button?.window?.frame ?? .zero
+        let blockerFrame = blockerItem?.button?.window?.frame ?? .zero
+        let screenWidth = NSScreen.main?.frame.width ?? 0
+        FileHandle.standardError.write(Data("""
+            [ControlItem \(kind.rawValue)] state=\(state)
+              glyph:   x=\(Int(glyphFrame.minX))  w=\(Int(glyphFrame.width))
+              blocker: x=\(Int(blockerFrame.minX))  w=\(Int(blockerFrame.width))
+              screen: \(Int(screenWidth))
+
+            """.utf8))
     }
 
     /// Glyph updates on state changes so the user can see which mode we're in.
