@@ -202,6 +202,10 @@ final class FeatureRuntime: ObservableObject {
     /// Bulk install or uninstall for the hub's "all" buttons.
     func setAllAvailable(_ available: Bool) {
         setAvailable(AppFeature.allCases, available, enablingFirstInstalls: false)
+        // The menu bar manager is gated by its own flag, not an AppFeature.
+        if !available {
+            MainActor.assumeIsolated { MenuBarManagerService.shared.isEnabled = false }
+        }
     }
 
     private func savedPreferences() -> [String: Any] {

@@ -411,6 +411,10 @@ enum SettingsDirectory {
                                        featureKeywords: SettingsSearchSupport
                                         .screenCaptureFeatureKeywords(s, language: language)),
                 SettingsDirectoryItem(page: .urlCleaner, title: s.urlCleanerName, icon: "link"),
+                SettingsDirectoryItem(page: .menuBarManager,
+                                      title: "Menu Bar Manager",
+                                      icon: "menubar.rectangle",
+                                      keywords: ["bartender", "menu bar", "hide icons", "status items"]),
                 SettingsDirectoryItem(page: .keyDebounce, title: s.keyDebounceName, icon: "keyboard"),
                 SettingsDirectoryItem(page: .superKey,
                                       title: FeatureStrings.superKey(language).pageTitle,
